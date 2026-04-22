@@ -41,6 +41,7 @@ import { ManaUsageEstimate } from '../gas/fee_math.js';
 import { GasFees } from '../gas/gas_fees.js';
 import { SiloedTag, Tag, TxScopedL2Log } from '../logs/index.js';
 import { type LogFilter, LogFilterSchema } from '../logs/log_filter.js';
+import type { L1ToL2MessageSource } from '../messaging/l1_to_l2_message_source.js';
 import { type ApiSchemaFor, optional, schemas } from '../schemas/schemas.js';
 import { MerkleTreeId } from '../trees/merkle_tree_id.js';
 import { NullifierMembershipWitness } from '../trees/nullifier_membership_witness.js';
@@ -75,14 +76,15 @@ import { type WorldStateSyncStatus, WorldStateSyncStatusSchema } from './world_s
  */
 export interface AztecNode
   extends Pick<
-    L2BlockSource,
-    | 'getBlocks'
-    | 'getCheckpoints'
-    | 'getBlockHeader'
-    | 'getL2Tips'
-    | 'getCheckpointedBlocks'
-    | 'getCheckpointsDataForEpoch'
-  > {
+      L2BlockSource,
+      | 'getBlocks'
+      | 'getCheckpoints'
+      | 'getBlockHeader'
+      | 'getL2Tips'
+      | 'getCheckpointedBlocks'
+      | 'getCheckpointsDataForEpoch'
+    >,
+    Pick<L1ToL2MessageSource, 'getL1ToL2Messages'> {
   /**
    * Returns the tips of the L2 chain.
    */
@@ -545,6 +547,8 @@ export const AztecNodeApiSchema: ApiSchemaFor<AztecNode> = {
   getL1ToL2MessageCheckpoint: z.function().args(schemas.Fr).returns(CheckpointNumberSchema.optional()),
 
   isL1ToL2MessageSynced: z.function().args(schemas.Fr).returns(z.boolean()),
+
+  getL1ToL2Messages: z.function().args(CheckpointNumberSchema).returns(z.array(schemas.Fr)),
 
   getL2ToL1Messages: z
     .function()

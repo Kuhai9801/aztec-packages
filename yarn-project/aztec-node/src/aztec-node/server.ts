@@ -1161,6 +1161,10 @@ export class AztecNodeService implements AztecNode, AztecNodeAdmin, AztecNodeDeb
     return messageIndex ? InboxLeaf.checkpointNumberFromIndex(messageIndex) : undefined;
   }
 
+  public getL1ToL2Messages(checkpointNumber: CheckpointNumber): Promise<Fr[]> {
+    return this.l1ToL2MessageSource.getL1ToL2Messages(checkpointNumber);
+  }
+
   /**
    * Returns whether an L1 to L2 message is synced by archiver and if it's ready to be included in a block.
    * @param l1ToL2Message - The L1 to L2 message to check.
