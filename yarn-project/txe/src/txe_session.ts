@@ -14,8 +14,8 @@ import {
   NoteStore,
   PrivateEventStore,
   RecipientTaggingStore,
-  SenderAddressBookStore,
   SenderTaggingStore,
+  TaggingSecretSourcesStore,
 } from '@aztec/pxe/server';
 import {
   ExecutionNoteCache,
@@ -211,7 +211,7 @@ export class TXESession implements TXESessionStateHandler {
     private accountStore: TXEAccountStore,
     private senderTaggingStore: SenderTaggingStore,
     private recipientTaggingStore: RecipientTaggingStore,
-    private senderAddressBookStore: SenderAddressBookStore,
+    private taggingSecretSourcesStore: TaggingSecretSourcesStore,
     private capsuleStore: CapsuleStore,
     private privateEventStore: PrivateEventStore,
     private jobCoordinator: JobCoordinator,
@@ -229,7 +229,7 @@ export class TXESession implements TXESessionStateHandler {
     const noteStore = new NoteStore(store);
     const senderTaggingStore = new SenderTaggingStore(store);
     const recipientTaggingStore = new RecipientTaggingStore(store);
-    const senderAddressBookStore = new SenderAddressBookStore(store);
+    const taggingSecretSourcesStore = new TaggingSecretSourcesStore(store);
     const capsuleStore = new CapsuleStore(store);
     const keyStore = new KeyStore(store);
     const accountStore = new TXEAccountStore(store);
@@ -265,7 +265,7 @@ export class TXESession implements TXESessionStateHandler {
       accountStore,
       senderTaggingStore,
       recipientTaggingStore,
-      senderAddressBookStore,
+      taggingSecretSourcesStore,
       capsuleStore,
       privateEventStore,
       nextBlockTimestamp,
@@ -286,7 +286,7 @@ export class TXESession implements TXESessionStateHandler {
       accountStore,
       senderTaggingStore,
       recipientTaggingStore,
-      senderAddressBookStore,
+      taggingSecretSourcesStore,
       capsuleStore,
       privateEventStore,
       jobCoordinator,
@@ -463,7 +463,7 @@ export class TXESession implements TXESessionStateHandler {
       this.accountStore,
       this.senderTaggingStore,
       this.recipientTaggingStore,
-      this.senderAddressBookStore,
+      this.taggingSecretSourcesStore,
       this.capsuleStore,
       this.privateEventStore,
       this.nextBlockTimestamp,
@@ -526,7 +526,7 @@ export class TXESession implements TXESessionStateHandler {
       aztecNode: this.stateMachine.node,
       senderTaggingStore: this.senderTaggingStore,
       recipientTaggingStore: this.recipientTaggingStore,
-      senderAddressBookStore: this.senderAddressBookStore,
+      taggingSecretSourcesStore: this.taggingSecretSourcesStore,
       capsuleService: new CapsuleService(this.capsuleStore, await this.keyStore.getAccounts()),
       privateEventStore: this.privateEventStore,
       contractSyncService: this.stateMachine.contractSyncService,
@@ -609,7 +609,7 @@ export class TXESession implements TXESessionStateHandler {
       addressStore: this.addressStore,
       aztecNode: this.stateMachine.node,
       recipientTaggingStore: this.recipientTaggingStore,
-      senderAddressBookStore: this.senderAddressBookStore,
+      taggingSecretSourcesStore: this.taggingSecretSourcesStore,
       capsuleService: new CapsuleService(this.capsuleStore, await this.keyStore.getAccounts()),
       privateEventStore: this.privateEventStore,
       messageContextService: this.stateMachine.messageContextService,
@@ -709,7 +709,7 @@ export class TXESession implements TXESessionStateHandler {
           addressStore: this.addressStore,
           aztecNode: this.stateMachine.node,
           recipientTaggingStore: this.recipientTaggingStore,
-          senderAddressBookStore: this.senderAddressBookStore,
+          taggingSecretSourcesStore: this.taggingSecretSourcesStore,
           capsuleService: new CapsuleService(this.capsuleStore, scopes),
           privateEventStore: this.privateEventStore,
           messageContextService: this.stateMachine.messageContextService,

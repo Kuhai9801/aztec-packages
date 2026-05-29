@@ -13,7 +13,12 @@ import {
 import { AztecAddress } from '@aztec/stdlib/aztec-address';
 import { siloNullifier } from '@aztec/stdlib/hash';
 import { PrivateContextInputs } from '@aztec/stdlib/kernel';
-import { type ContractClassLog, ExtendedDirectionalAppTaggingSecret, type TaggingIndexRange } from '@aztec/stdlib/logs';
+import {
+  type ContractClassLog,
+  ExtendedDirectionalAppTaggingSecret,
+  type TaggingIndexRange,
+  computeSharedTaggingSecret,
+} from '@aztec/stdlib/logs';
 import { Tag } from '@aztec/stdlib/logs';
 import { Note, type NoteStatus } from '@aztec/stdlib/note';
 import {
@@ -236,13 +241,11 @@ export class PrivateExecutionOracle extends UtilityExecutionOracle implements IP
   ) {
     const senderCompleteAddress = await this.getCompleteAddressOrFail(sender);
     const senderIvsk = await this.keyStore.getMasterIncomingViewingSecretKey(sender);
-    return ExtendedDirectionalAppTaggingSecret.compute(
-      senderCompleteAddress,
-      senderIvsk,
-      recipient,
-      contractAddress,
-      recipient,
-    );
+    const taggingSecretPoint = await computeSharedTaggingSecret(senderCompleteAddress, senderIvsk, recipient);
+    if (!taggingSecretPoint) {
+      return undefined;
+    }
+    return ExtendedDirectionalAppTaggingSecret.compute(taggingSecretPoint, contractAddress, recipient);
   }
 
   async #getIndexToUseForSecret(secret: ExtendedDirectionalAppTaggingSecret): Promise<number> {
@@ -564,7 +567,7 @@ export class PrivateExecutionOracle extends UtilityExecutionOracle implements IP
       aztecNode: this.aztecNode,
       senderTaggingStore: this.senderTaggingStore,
       recipientTaggingStore: this.recipientTaggingStore,
-      senderAddressBookStore: this.senderAddressBookStore,
+      taggingSecretSourcesStore: this.taggingSecretSourcesStore,
       capsuleService: this.capsuleService,
       privateEventStore: this.privateEventStore,
       messageContextService: this.messageContextService,
