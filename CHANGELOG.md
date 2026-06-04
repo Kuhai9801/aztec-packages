@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.3.2](https://github.com/AztecProtocol/aztec-packages/compare/v4.3.1...v4.3.2) (2026-06-04)
+
+
+### Bug Fixes
+
+* released contract artifact aztec version ([#23470](https://github.com/AztecProtocol/aztec-packages/issues/23470)) ([a8a3940](https://github.com/AztecProtocol/aztec-packages/commit/a8a3940afc2871382913a142341cb35927f5ef34))
+
 ## [4.3.1](https://github.com/AztecProtocol/aztec-packages/compare/v4.3.0...v4.3.1) (2026-06-03)
 
 
