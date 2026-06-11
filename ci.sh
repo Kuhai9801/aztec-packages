@@ -122,6 +122,14 @@ case "$cmd" in
     # GitHub status check name is unchanged.
     multi_job_run "x-$cmd amd64 ci-$cmd"
     ;;
+  bench)
+    # Launched by the build instance on uploadable runs to produce stable benchmark
+    # numbers on a dedicated, fixed, on-demand instance. AWS_INSTANCE pins the exact
+    # type (bypasses spot pool diversification); NO_SPOT forces on-demand. CI_DASHBOARD
+    # and PARENT_LOG_ID are inherited from the launching run so it nests as a sibling job.
+    AWS_INSTANCE=m6a.16xlarge NO_SPOT=1 JOB_ID=bench INSTANCE_POSTFIX=bench \
+      bootstrap_ec2 "./bootstrap.sh ci-bench"
+    ;;
   socket-fix)
     export CI_DASHBOARD="prs"
     export JOB_ID="x-socket-fix"

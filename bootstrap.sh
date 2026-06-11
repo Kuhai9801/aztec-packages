@@ -435,6 +435,18 @@ function build_and_test {
       start_txes
       make noir-projects-txe-tests
 
+      # Benches (full builds only). For uploadable runs we want stable numbers, so
+      # launch a dedicated fixed on-demand instance to run them (backgrounded and
+      # logged like the test engine, waited on below). Otherwise the benches just
+      # become tests, run by this engine under contention as a breakage check.
+      if [ "$1" == full ]; then
+        if [ "${SHOULD_UPLOAD_BENCHMARKS:-0}" == 1 ]; then
+          setsid color_prefix "bench" "denoise './ci.sh bench'" & bench_pid=$!
+        else
+          bench_cmds >> $test_cmds_file
+        fi
+      fi
+
       # Signal tests complete, handled by parallel -E STOP.
       echo STOP >> $test_cmds_file
     fi
@@ -446,6 +458,13 @@ function build_and_test {
   done
 
   stop_txes
+
+  # Wait for the dedicated bench instance, if one was launched. Non-fatal: bench
+  # infra shouldn't block the run — a failure just means no fresh numbers to upload.
+  if [ -n "${bench_pid:-}" ]; then
+    echo "Waiting for dedicated bench run..."
+    wait "$bench_pid" || echo_stderr "Dedicated bench run failed (non-fatal)."
+  fi
 
   return 0
 }
@@ -750,13 +769,22 @@ case "$cmd" in
     export USE_TEST_CACHE=1
     export CI_FULL=1
     build_and_test full
-    bench
     ;;
   "ci-full-no-test-cache")
     export CI=1
     export USE_TEST_CACHE=0
     export CI_FULL=1
     build_and_test full
+    ;;
+  "ci-bench")
+    # Run on a dedicated, fixed, on-demand instance (launched by the build
+    # instance via './ci.sh bench') for stable benchmark numbers. The build is a
+    # near-instant cache pull, as the launching build instance already populated
+    # the cache for this commit. No test engine; bench uploads bench-<treehash>.
+    export CI=1
+    export CI_FULL=1
+    prep
+    make full
     bench
     ;;
   "ci-chonk-input-update")

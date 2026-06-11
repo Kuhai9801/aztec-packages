@@ -149,8 +149,11 @@ function main {
   echo "CI_MODE=$ci_mode" >> $GITHUB_ENV
   echo "CI mode: $ci_mode"
 
-  # Determine if benchmarks should be uploaded (merge-queue, full, or full-no-test-cache modes)
-  if [[ "$ci_mode" == "merge-queue" || "$ci_mode" == "merge-queue-heavy" || "$ci_mode" == "full" || "$ci_mode" == "full-no-test-cache" ]]; then
+  # Only the canonical "about to land on next" series produces uploadable benchmark
+  # numbers. This flag now also gates spinning up the dedicated on-demand bench box
+  # (build_and_test reads it on the instance), so keep it scoped to merge-queue->next.
+  # Other full/merge-queue runs run benches inline as a breakage check, no upload.
+  if [[ ("$ci_mode" == "merge-queue" || "$ci_mode" == "merge-queue-heavy") && "$target_branch" == "next" ]]; then
     echo "SHOULD_UPLOAD_BENCHMARKS=1" >> $GITHUB_ENV
   fi
 
