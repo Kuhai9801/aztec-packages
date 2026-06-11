@@ -18,9 +18,10 @@ import {
   getContractFunctionAbi,
   getFunctionSelector,
 } from '../avm/fixtures/utils.js';
+import { type AvmIpcBackend, AvmSimulatorPool } from '../avm_simulator_pool.js';
+import { CdbIpcServer } from '../cdb_ipc_server.js';
 import { PublicContractsDB } from '../public_db_sources.js';
 import { MeasuredCppPublicTxSimulator } from '../public_tx_simulator/cpp_public_tx_simulator.js';
-import { MeasuredCppVsTsPublicTxSimulator } from '../public_tx_simulator/cpp_vs_ts_public_tx_simulator.js';
 import type { MeasuredPublicTxSimulatorInterface } from '../public_tx_simulator/public_tx_simulator_interface.js';
 import { TestExecutorMetrics } from '../test_executor_metrics.js';
 import { SimpleContractDataSource } from './simple_contract_data_source.js';
@@ -65,7 +66,10 @@ export type MeasuredSimulatorFactory = (
 export class PublicTxSimulationTester extends BaseAvmSimulationTester {
   protected txCount: number = 0;
   private simulator: MeasuredPublicTxSimulatorInterface;
+  private currentHandle?: { cancel(waitTimeoutMs?: number): Promise<void> };
   private metricsPrefix?: string;
+  protected avmBackend?: AvmIpcBackend;
+  protected cdbServer?: CdbIpcServer;
 
   constructor(
     merkleTree: MerkleTreeWriteOperations,
@@ -81,7 +85,9 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
     if (simulatorFactory) {
       this.simulator = simulatorFactory(merkleTree, contractsDB, globals, this.metrics, config);
     } else {
-      this.simulator = new MeasuredCppPublicTxSimulator(merkleTree, contractsDB, globals, this.metrics, config);
+      // No simulator — this tester can only be used for setup (setFeePayerBalance, createTx, etc.)
+      // To simulate, use PublicTxSimulationTester.create() or pass a simulatorFactory.
+      this.simulator = undefined!;
     }
   }
 
@@ -89,15 +95,32 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
     worldStateService: NativeWorldStateService, // make sure to close this later
     globals: GlobalVariables = defaultGlobals(),
     metrics: TestExecutorMetrics = new TestExecutorMetrics(),
-    useCppSimulator = false,
     config: PublicSimulatorConfig = defaultConfig,
   ): Promise<PublicTxSimulationTester> {
     const contractDataSource = new SimpleContractDataSource();
     const merkleTree = await worldStateService.fork();
-    const simulatorFactory: MeasuredSimulatorFactory = useCppSimulator
-      ? (mt, cdb, g, m, c) => new MeasuredCppPublicTxSimulator(mt, cdb, g, m, c)
-      : (mt, cdb, g, m, c) => new MeasuredCppVsTsPublicTxSimulator(mt, cdb, g, m, c);
-    return new PublicTxSimulationTester(merkleTree, contractDataSource, globals, metrics, simulatorFactory, config);
+
+    const cdbServer = new CdbIpcServer();
+    const forkId = merkleTree.getRevision().forkId;
+    cdbServer.registerFork(forkId, new PublicContractsDB(contractDataSource), globals.timestamp);
+    const avmBackend = await AvmSimulatorPool.spawn({
+      wsdbSocketPath: worldStateService.getSocketPath(),
+      cdbSocketPath: cdbServer.socketPath,
+    });
+    const simulatorFactory: MeasuredSimulatorFactory = (_mt, _cdb, g, m, c) =>
+      new MeasuredCppPublicTxSimulator(avmBackend, g, m, c, undefined, forkId);
+
+    const tester = new PublicTxSimulationTester(
+      merkleTree,
+      contractDataSource,
+      globals,
+      metrics,
+      simulatorFactory,
+      config,
+    );
+    tester.avmBackend = avmBackend;
+    tester.cdbServer = cdbServer;
+    return tester;
   }
 
   public setMetricsPrefix(prefix: string) {
@@ -165,7 +188,9 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
         'No simulator configured. Pass a simulatorFactory to the constructor or use PublicTxSimulationTester.create()',
       );
     }
-    const avmResult = await this.simulator.simulate(tx, fullTxLabel);
+    const handle = this.simulator.simulate(tx, fullTxLabel);
+    this.currentHandle = handle;
+    const avmResult = await handle.result;
 
     await this.#recordBytecodeSizes(fullTxLabel, [...setupCalls, ...appCalls, ...(teardownCall ? [teardownCall] : [])]);
 
@@ -198,18 +223,8 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
     teardownCall?: TestEnqueuedCall,
     feePayer?: AztecAddress,
     privateInsertions?: TestPrivateInsertions,
-    gasLimits?: Gas,
   ): Promise<PublicTxResult> {
-    return await this.simulateTx(
-      sender,
-      setupCalls,
-      appCalls,
-      teardownCall,
-      feePayer,
-      privateInsertions,
-      txLabel,
-      gasLimits,
-    );
+    return await this.simulateTx(sender, setupCalls, appCalls, teardownCall, feePayer, privateInsertions, txLabel);
   }
 
   /**
@@ -227,7 +242,6 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
     teardownCall?: TestEnqueuedCall,
     feePayer?: AztecAddress,
     privateInsertions?: TestPrivateInsertions,
-    gasLimits?: Gas,
   ): Promise<PublicTxResult> {
     return await this.simulateTxWithLabel(
       txLabel,
@@ -237,12 +251,25 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
       teardownCall,
       feePayer,
       privateInsertions,
-      gasLimits,
     );
   }
 
   public prettyPrintMetrics() {
     this.metrics.prettyPrint();
+  }
+
+  /** Clean up IPC resources (AvmBackend process, CDB server, and merkle tree fork) created by create(). */
+  public async close(): Promise<void> {
+    if (this.avmBackend?.destroy) {
+      await this.avmBackend.destroy();
+    }
+    if (this.cdbServer) {
+      await this.cdbServer.close();
+    }
+    // Close the merkle tree fork to release IPC resources before the wsdb process is killed.
+    if (this.merkleTrees?.close) {
+      await this.merkleTrees.close().catch(() => {});
+    }
   }
 
   /**
@@ -253,7 +280,7 @@ export class PublicTxSimulationTester extends BaseAvmSimulationTester {
    * @param waitTimeoutMs - If provided, wait up to this many ms for the simulation to actually stop.
    */
   public async cancel(waitTimeoutMs?: number): Promise<void> {
-    await this.simulator.cancel?.(waitTimeoutMs);
+    await this.currentHandle?.cancel(waitTimeoutMs);
   }
 
   /**

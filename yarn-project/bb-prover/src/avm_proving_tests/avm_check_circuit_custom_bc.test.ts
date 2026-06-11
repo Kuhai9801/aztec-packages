@@ -27,6 +27,7 @@ describe('AVM custom bytecodes unhappy paths', () => {
   });
 
   afterEach(async () => {
+    await tester.close();
     await worldStateService.close();
   });
 
@@ -66,6 +67,7 @@ describe('AVM bytecode flow unhappy paths', () => {
   });
 
   afterEach(async () => {
+    await tester.close();
     await worldStateService.close();
   });
 
@@ -110,6 +112,7 @@ describe('AVM custom bytecodes truncation', () => {
   });
 
   afterEach(async () => {
+    await tester.close();
     await worldStateService.close();
   });
 

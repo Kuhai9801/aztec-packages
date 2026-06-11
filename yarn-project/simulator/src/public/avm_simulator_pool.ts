@@ -1,13 +1,6 @@
 import { type Logger, createLogger } from '@aztec/foundation/log';
 
-/**
- * Minimal interface for an out-of-process AVM simulator that speaks msgpack over IPC.
- *
- * Intentionally aligned with `IMsgpackBackendAsync` from bb.js — `AvmBackend` (which spawns
- * `aztec-avm` and routes msgpack via UDS) and `AvmSimulatorPool` (a worker pool of those backends)
- * both implement this. Anything that wants to run an AVM simulation can take this interface and
- * not care which it got.
- */
+/** Msgpack IPC backend interface (matches bb.js IMsgpackBackendAsync). */
 export interface AvmIpcBackend {
   call(inputBuffer: Uint8Array): Promise<Uint8Array>;
   cancel?(): Promise<void>;

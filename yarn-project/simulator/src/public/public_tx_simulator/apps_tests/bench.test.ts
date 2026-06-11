@@ -16,6 +16,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path, { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
+import { type AvmIpcBackend, AvmSimulatorPool } from '../../avm_simulator_pool.js';
+import { CdbIpcServer } from '../../cdb_ipc_server.js';
 import { ammTest } from '../../fixtures/amm_test.js';
 import { bulkTest, megaBulkTest } from '../../fixtures/bulk_test.js';
 import {
@@ -25,6 +27,7 @@ import {
 } from '../../fixtures/public_tx_simulation_tester.js';
 import { SimpleContractDataSource } from '../../fixtures/simple_contract_data_source.js';
 import { tokenTest } from '../../fixtures/token_test.js';
+import { PublicContractsDB } from '../../public_db_sources.js';
 import { TestExecutorMetrics } from '../../test_executor_metrics.js';
 import { MeasuredCppPublicTxSimulator } from '../cpp_public_tx_simulator.js';
 import { MeasuredPublicTxSimulator } from '../measured_public_tx_simulator.js';
@@ -64,19 +67,34 @@ describe('Public TX simulator apps tests: benchmarks', () => {
     describe('Regular apps and AVM test contract', () => {
       let worldStateService: NativeWorldStateService;
       let tester: PublicTxSimulationTester;
+      let avmBackend: AvmIpcBackend | undefined;
+      let cdbServer: CdbIpcServer | undefined;
 
       beforeEach(async () => {
         worldStateService = await NativeWorldStateService.tmp();
         const contractDataSource = new SimpleContractDataSource();
         const merkleTree = await worldStateService.fork();
-        // For benchmarking, use pure simulators (no CppVsTs comparison overhead)
-        const simulatorFactory: MeasuredSimulatorFactory = useCppSimulator
-          ? (mt, cdb, g, m, c) => new MeasuredCppPublicTxSimulator(mt, cdb, g, m, c)
-          : (mt, cdb, g, m, c) => new MeasuredPublicTxSimulator(mt, cdb, g, m, c);
+        const globals = defaultGlobals();
+
+        let simulatorFactory: MeasuredSimulatorFactory;
+        if (useCppSimulator) {
+          const forkId = merkleTree.getRevision().forkId;
+          cdbServer = new CdbIpcServer();
+          cdbServer.registerFork(forkId, new PublicContractsDB(contractDataSource), globals.timestamp);
+          avmBackend = await AvmSimulatorPool.spawn({
+            wsdbSocketPath: worldStateService.getSocketPath(),
+            cdbSocketPath: cdbServer.socketPath,
+          });
+          simulatorFactory = (_mt, _cdb, g, m, c) =>
+            new MeasuredCppPublicTxSimulator(avmBackend!, g, m, c, undefined, forkId);
+        } else {
+          simulatorFactory = (mt, cdb, g, m, c) => new MeasuredPublicTxSimulator(mt, cdb, g, m, c);
+        }
+
         tester = new PublicTxSimulationTester(
           merkleTree,
           contractDataSource,
-          defaultGlobals(),
+          globals,
           metrics,
           simulatorFactory,
           config,
@@ -84,6 +102,15 @@ describe('Public TX simulator apps tests: benchmarks', () => {
       });
 
       afterEach(async () => {
+        if (avmBackend?.destroy) {
+          await avmBackend.destroy();
+        }
+        if (cdbServer) {
+          await cdbServer.close();
+        }
+        avmBackend = undefined;
+        cdbServer = undefined;
+        await tester.close();
         await worldStateService.close();
       });
 
@@ -205,22 +232,31 @@ describe('Public TX simulator apps tests: benchmarks', () => {
       let worldStateService: NativeWorldStateService;
       let tester: PublicTxSimulationTester;
       let avmGadgetsTestContract: ContractInstanceWithAddress;
+      let avmBackend: AvmIpcBackend | undefined;
+      let cdbServer: CdbIpcServer | undefined;
 
       beforeEach(async () => {
         worldStateService = await NativeWorldStateService.tmp();
         const contractDataSource = new SimpleContractDataSource();
         const merkleTree = await worldStateService.fork();
-        // For benchmarking, use pure simulators (no CppVsTs comparison overhead)
-        const simulatorFactory: MeasuredSimulatorFactory = useCppSimulator
-          ? (mt, cdb, g, m, c) => new MeasuredCppPublicTxSimulator(mt, cdb, g, m, c)
-          : (mt, cdb, g, m, c) => new MeasuredPublicTxSimulator(mt, cdb, g, m, c);
-        tester = new PublicTxSimulationTester(
-          merkleTree,
-          contractDataSource,
-          defaultGlobals(),
-          metrics,
-          simulatorFactory,
-        );
+        const globals = defaultGlobals();
+
+        let simulatorFactory: MeasuredSimulatorFactory;
+        if (useCppSimulator) {
+          const forkId = merkleTree.getRevision().forkId;
+          cdbServer = new CdbIpcServer();
+          cdbServer.registerFork(forkId, new PublicContractsDB(contractDataSource), globals.timestamp);
+          avmBackend = await AvmSimulatorPool.spawn({
+            wsdbSocketPath: worldStateService.getSocketPath(),
+            cdbSocketPath: cdbServer.socketPath,
+          });
+          simulatorFactory = (_mt, _cdb, g, m, c) =>
+            new MeasuredCppPublicTxSimulator(avmBackend!, g, m, c, undefined, forkId);
+        } else {
+          simulatorFactory = (mt, cdb, g, m, c) => new MeasuredPublicTxSimulator(mt, cdb, g, m, c);
+        }
+
+        tester = new PublicTxSimulationTester(merkleTree, contractDataSource, globals, metrics, simulatorFactory);
         avmGadgetsTestContract = await tester.registerAndDeployContract(
           /*constructorArgs=*/ [],
           deployer,
@@ -230,6 +266,15 @@ describe('Public TX simulator apps tests: benchmarks', () => {
       });
 
       afterEach(async () => {
+        if (avmBackend?.destroy) {
+          await avmBackend.destroy();
+        }
+        if (cdbServer) {
+          await cdbServer.close();
+        }
+        avmBackend = undefined;
+        cdbServer = undefined;
+        await tester.close();
         await worldStateService.close();
       });
 
