@@ -26,6 +26,17 @@ for build_dir in "${!PLATFORMS[@]}"; do
   mkdir -p "${out_dir}"
   cp "build/${build_dir}/bb" "${out_dir}/bb"
   cp "build/${build_dir}/nodejs_module.node" "${out_dir}/nodejs_module.node"
+  files=("bb" "nodejs_module.node")
+
+  for binary in aztec-avm aztec-cdb; do
+    if [ -f "build/${build_dir}/${binary}" ]; then
+      cp "build/${build_dir}/${binary}" "${out_dir}/${binary}"
+      files+=("${binary}")
+    fi
+  done
+
+  files_json=$(printf '"%s",' "${files[@]}")
+  files_json="[${files_json%,}]"
 
   cat > "${out_dir}/package.json" <<EOF
 {
@@ -35,7 +46,7 @@ for build_dir in "${!PLATFORMS[@]}"; do
   "license": "MIT",
   "os": ["${os}"],
   "cpu": ["${cpu}"],
-  "files": ["bb", "nodejs_module.node"],
+  "files": ${files_json},
   "preferUnplugged": true
 }
 EOF

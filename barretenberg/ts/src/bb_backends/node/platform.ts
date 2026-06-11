@@ -98,6 +98,16 @@ export function findBbBinary(customPath?: string): string | null {
   return findNativeBinary('bb', customPath, 'BB_BINARY_PATH');
 }
 
+/**
+ * Find the aztec-avm binary used by the standalone AVM simulator IPC server.
+ *
+ * @param customPath Optional custom path to aztec-avm binary (overrides automatic detection)
+ * @returns Absolute path to aztec-avm binary, or null if not found
+ */
+export function findAvmBinary(customPath?: string): string | null {
+  return findNativeBinary('aztec-avm', customPath, 'AVM_BINARY_PATH');
+}
+
 export function findNapiBinary(customPath?: string): string | null {
   return findNativeBinary('nodejs_module.node', customPath);
 }
