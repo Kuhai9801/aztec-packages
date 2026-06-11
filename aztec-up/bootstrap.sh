@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 source $(git rev-parse --show-toplevel)/ci3/source_bootstrap
 
-hash=$(hash_str $(cache_content_hash ^aztec-up/) $(../ipc-runtime/bootstrap.sh hash) $(../yarn-project/bootstrap.sh hash))
+hash=$(hash_str $(cache_content_hash ^aztec-up/) $(../ipc-runtime/bootstrap.sh hash) $(../wsdb/bootstrap.sh hash) $(../yarn-project/bootstrap.sh hash))
 
 # Bare aliases ("nightly", "latest") resolve to this major version.
 DEFAULT_MAJOR_VERSION=${AZTEC_TOOLCHAIN_DEFAULT_MAJOR_VERSION:-4}
+
+function wsdb_package_dirs {
+  for package_dir in "$root"/wsdb/ts/packages/*; do
+    [ -d "$package_dir" ] && echo "$package_dir"
+  done
+  echo "$root/wsdb/ts"
+}
 
 function build {
   # Noop if user doesn't have docker.
@@ -105,6 +112,7 @@ EOF
     {
       echo $root/ipc-runtime/ts
       (cd $root/barretenberg/ts && ./bootstrap.sh get_projects)
+      wsdb_package_dirs
       $root/noir/bootstrap.sh get_projects
       $root/yarn-project/bootstrap.sh get_projects
     } | DRY_RUN= parallel --tag --line-buffer --halt now,fail=1 "retry 'cd {} && dump_fail \"deploy_npm $version\" >/dev/null'"
