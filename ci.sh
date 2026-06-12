@@ -124,10 +124,13 @@ case "$cmd" in
     ;;
   bench)
     # Launched by the build instance on uploadable runs to produce stable benchmark
-    # numbers on a dedicated, fixed, on-demand instance. AWS_INSTANCE pins the exact
-    # type (bypasses spot pool diversification); NO_SPOT forces on-demand. CI_DASHBOARD
-    # and PARENT_LOG_ID are inherited from the launching run so it nests as a sibling job.
-    AWS_INSTANCE=m6a.16xlarge NO_SPOT=1 JOB_ID=bench INSTANCE_POSTFIX=bench \
+    # numbers on a dedicated instance of a FIXED type. AWS_INSTANCE pins the exact type
+    # (bypasses spot pool diversification) — that's what keeps numbers comparable. Spot
+    # vs on-demand is the same hardware, so we try spot first and fall back to on-demand
+    # (the default fleet behaviour); a rare mid-run spot reclaim just yields no numbers
+    # for that run (the launcher wait is non-fatal). CI_DASHBOARD and PARENT_LOG_ID are
+    # inherited from the launching run so it nests as a sibling job.
+    AWS_INSTANCE=m6a.16xlarge JOB_ID=bench INSTANCE_POSTFIX=bench \
       bootstrap_ec2 "./bootstrap.sh ci-bench"
     ;;
   socket-fix)
