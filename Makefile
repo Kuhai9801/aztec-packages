@@ -60,6 +60,12 @@ fast: release-image barretenberg boxes playground docs aztec-up \
 # Full bootstrap.
 full: fast bb-full-tests bb-cpp-full yarn-project-benches
 
+# Everything required to run the full benchmark suite (see bootstrap.sh bench_cmds),
+# and nothing more. yarn-project-benches transitively builds the bb native/wasm bench
+# binaries (via bb-ts -> bb-cpp-native/wasm-threads), the e2e bench inputs, noir-projects
+# and l1-contracts; bb-sol adds the Solidity gas benchmark's generated verifier.
+bench: yarn-project-benches bb-sol
+
 # Release. Everything plus copy bb cross compiles to ts projects.
 release: fast bb-cpp-release-dir bb-ts-cross-copy
 

@@ -784,7 +784,7 @@ case "$cmd" in
     export CI=1
     export CI_FULL=1
     prep
-    make full
+    make bench
     bench
     ;;
   "ci-chonk-input-update")
