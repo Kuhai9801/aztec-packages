@@ -459,11 +459,12 @@ function build_and_test {
 
   stop_txes
 
-  # Wait for the dedicated bench instance, if one was launched. Non-fatal: bench
-  # infra shouldn't block the run — a failure just means no fresh numbers to upload.
+  # Wait for the dedicated bench instance, if one was launched. Fatal, matching the
+  # old inline `bench`: a benchmark that fails to build/run is a real breakage and
+  # must fail the run rather than silently reach next.
   if [ -n "${bench_pid:-}" ]; then
     echo "Waiting for dedicated bench run..."
-    wait "$bench_pid" || echo_stderr "Dedicated bench run failed (non-fatal)."
+    wait "$bench_pid"
   fi
 
   return 0
