@@ -74,6 +74,9 @@ function filter_build_instances {
   [ "${#filters[@]}" -eq 0 ] && filters=("$(aws_instance_name "$BRANCH" "$arch")")
   rows=$(list_build_instances)
   for f in "${filters[@]}"; do
+    # Sanitise the token the same way instance names are (e.g. a branch's '/' -> '_'),
+    # so passing a raw branch name like 'mv/f-669' still matches '..._mv_f-669_...'.
+    f=$(printf '%s' "$f" | tr -c 'a-zA-Z0-9-' '_')
     rows=$(printf '%s\n' "$rows" | awk -v p="$f" 'index(tolower($1), tolower(p))')
   done
   printf '%s\n' "$rows" | sed '/^$/d'
