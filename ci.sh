@@ -416,11 +416,14 @@ case "$cmd" in
       if [ -z "$ip" ] || [ "$ip" = "None" ]; then echo_stderr "No public IP for $resolved_name."; exit 1; fi
       ssh -tq -F $ci3/aws/build_instance_ssh_config ubuntu@$ip "$container_cmd"
     else
+      # SSM sessions run as the non-root ssm-user (which has passwordless sudo), so
+      # use sudo rather than runuser. Running docker as root is fine — the container
+      # itself drops to aztec-dev via --user.
       aws ssm start-session \
         --region us-east-2 \
         --target "$iid" \
         --document-name "AWS-StartInteractiveCommand" \
-        --parameters "{\"command\":[\"runuser -u ubuntu -- bash -c '$container_cmd'\"]}"
+        --parameters "{\"command\":[\"sudo bash -c '$container_cmd'\"]}"
     fi
     ;;
   shell-host)
