@@ -149,12 +149,18 @@ function main {
   echo "CI_MODE=$ci_mode" >> $GITHUB_ENV
   echo "CI mode: $ci_mode"
 
-  # Only the canonical "about to land on next" series produces uploadable benchmark
-  # numbers. This flag now also gates spinning up the dedicated on-demand bench box
-  # (build_and_test reads it on the instance), so keep it scoped to merge-queue->next.
-  # Other full/merge-queue runs run benches inline as a breakage check, no upload.
-  if [[ ("$ci_mode" == "merge-queue" || "$ci_mode" == "merge-queue-heavy") && "$target_branch" == "next" ]]; then
+  # Publish benchmarks for the full / merge-queue modes (ci-fast only runs tests, no
+  # benches). merge-queue->next publishes to bench/next, everything else to bench/prs
+  # (see BENCH_BRANCH below).
+  if [[ "$ci_mode" == "merge-queue" || "$ci_mode" == "merge-queue-heavy" || "$ci_mode" == "full" || "$ci_mode" == "full-no-test-cache" ]]; then
     echo "SHOULD_UPLOAD_BENCHMARKS=1" >> $GITHUB_ENV
+  fi
+
+  # Only the canonical "about to land on next" series runs on the dedicated, fixed-
+  # hardware bench box (stable numbers). Everything else benches inline on the build
+  # instance and publishes to bench/prs. Read on the instance by build_and_test.
+  if [[ ("$ci_mode" == "merge-queue" || "$ci_mode" == "merge-queue-heavy") && "$target_branch" == "next" ]]; then
+    echo "BENCH_DEDICATED=1" >> $GITHUB_ENV
   fi
 
   # Determine the branch label for benchmark publishing.

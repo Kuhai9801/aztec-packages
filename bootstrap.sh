@@ -435,12 +435,12 @@ function build_and_test {
       start_txes
       make noir-projects-txe-tests
 
-      # Benches (full builds only). For uploadable runs we want stable numbers, so
-      # launch a dedicated fixed on-demand instance to run them (backgrounded and
-      # logged like the test engine, waited on below). Otherwise the benches just
-      # become tests, run by this engine under contention as a breakage check.
+      # Benches (full builds only). The canonical next series wants stable numbers, so
+      # it runs on a dedicated fixed-hardware box (launched here, logged like the test
+      # engine, waited on below). Everything else benches inline as tests — a breakage
+      # check, and published to bench/prs afterwards if this run uploads.
       if [ "$1" == full ]; then
-        if [ "${SHOULD_UPLOAD_BENCHMARKS:-0}" == 1 ]; then
+        if [ "${BENCH_DEDICATED:-0}" == 1 ]; then
           setsid color_prefix "bench" "denoise './ci.sh bench'" & bench_pid=$!
         else
           bench_cmds >> $test_cmds_file
@@ -459,12 +459,17 @@ function build_and_test {
 
   stop_txes
 
-  # Wait for the dedicated bench instance, if one was launched. Fatal, matching the
-  # old inline `bench`: a benchmark that fails to build/run is a real breakage and
-  # must fail the run rather than silently reach next.
-  if [ -n "${bench_pid:-}" ]; then
-    echo "Waiting for dedicated bench run..."
-    wait "$bench_pid"
+  # Benches (full builds only).
+  if [ "$1" == full ]; then
+    if [ -n "${bench_pid:-}" ]; then
+      # Dedicated bench box (next). Fatal, matching the old inline `bench`: a benchmark
+      # that fails to build/run is a real breakage and must fail the run, not reach next.
+      echo "Waiting for dedicated bench run..."
+      wait "$bench_pid"
+    elif [ "${SHOULD_UPLOAD_BENCHMARKS:-0}" == 1 ]; then
+      # Benches ran inline as tests above; merge + upload them so they publish (bench/prs).
+      bench_publish
+    fi
   fi
 
   return 0
@@ -488,6 +493,16 @@ function bench_merge {
 
 }
 
+# Merge all component bench-out/*.bench.json into one and upload it to the
+# bench-<treehash> cache key, which the GA "Upload benchmarks" step then publishes.
+# Used both by `bench` (dedicated box) and by the inline benches-as-tests path.
+function bench_publish {
+  rm -rf bench-out
+  mkdir -p bench-out
+  bench_merge
+  cache_upload bench-$(git rev-parse HEAD^{tree}).tar.gz bench-out/bench.json
+}
+
 function bench {
   # TODO bench for arm64.
   if [ $(arch) == arm64 ]; then
@@ -496,12 +511,7 @@ function bench {
   echo_header "bench all"
   bench_cmds > $bench_cmds_file
   denoise "bench_engine $bench_cmds_file"
-
-  rm -rf bench-out
-  mkdir -p bench-out
-  bench_merge
-  cache_upload bench-$(git rev-parse HEAD^{tree}).tar.gz bench-out/bench.json
-
+  bench_publish
 }
 
 ### RELEASING ##########################################################################################################
